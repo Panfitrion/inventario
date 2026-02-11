@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Inventario - Panadería</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        /* Deshabilitar selección de texto */
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .tap-highlight-transparent {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Particle Animation */
+        @keyframes float-up {
+            0% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(-30px) scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            animation: float-up 0.6s ease-out forwards;
+            font-weight: bold;
+            font-size: 1.5rem;
+            z-index: 50;
+        }
+
+        .particle-green {
+            color: #4ade80;
+            text-shadow: 0 0 5px rgba(74, 222, 128, 0.5);
+        }
+
+        .particle-red {
+            color: #f87171;
+            text-shadow: 0 0 5px rgba(248, 113, 113, 0.5);
+        }
+    </style>
+</head>
+
+<body class="bg-slate-900 text-white min-h-screen font-sans antialiased overflow-hidden">
+
+    <!-- Header modo kiosco -->
+    <header
+        class="fixed top-0 w-full bg-slate-800/90 backdrop-blur-md p-4 shadow-lg z-50 flex justify-between items-center border-b border-slate-700">
+        <h1 class="text-xl md:text-2xl font-bold tracking-wider text-amber-500 uppercase">Producción</h1>
+        <div class="flex items-center gap-3">
+            <button onclick="openHistoryModal()"
+                class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-2 rounded-lg text-sm transition-colors border border-slate-600 flex items-center gap-2 active:scale-95">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="hidden sm:inline">Historial</span>
+            </button>
+            <button onclick="openAddModal()"
+                class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg active:scale-95">
+                + Nuevo
+            </button>
+            <div id="connection-status" class="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Conectado Local">
+            </div>
+        </div>
+    </header>
+
+    <!-- Grid de Productos -->
+    <main id="product-grid"
+        class="pt-20 px-4 pb-24 h-screen overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 scroll-smooth">
+        <!-- Rendered by JS -->
+        <div
+            class="animate-pulse bg-slate-800/50 h-48 rounded-2xl flex items-center justify-center text-slate-500 border border-slate-700">
+            Cargando...
+        </div>
+    </main>
+
+    <!-- UI Overlay for Toasts -->
+    <div id="toast-container"
+        class="fixed bottom-6 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-[60] pointer-events-none w-full max-w-sm px-4">
+    </div>
+
+
+    <!-- Modals (Batch, Add, History) -->
+
+    <!-- Batch Modal -->
+    <div id="batch-modal"
+        class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] hidden flex flex-col justify-center items-center p-4">
+        <div
+            class="bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl border border-slate-600 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500">
+            </div>
+
+            <h2 id="batch-product-name" class="text-2xl font-bold text-center mb-6 text-white truncate">Producto</h2>
+
+            <div class="bg-slate-900 p-4 rounded-xl mb-6 text-right border border-slate-700 shadow-inner">
+                <span id="batch-input-display" class="text-5xl font-mono tracking-widest text-amber-400">0</span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3 mb-6">
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">1</button>
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">2</button>
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">3</button>
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">4</button>
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">5</button>
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">6</button>
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">7</button>
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">8</button>
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">9</button>
+                <button
+                    class="bg-red-900/40 hover:bg-red-800 text-red-300 h-16 rounded-xl text-xl font-bold transition-all active:scale-95 border border-red-900/30"
+                    onclick="clearBatch()">C</button>
+                <button
+                    class="batch-key bg-slate-700 hover:bg-slate-600 active:bg-slate-500 h-16 rounded-xl text-2xl font-bold transition-all active:scale-95 shadow">0</button>
+                <button
+                    class="bg-green-600 hover:bg-green-500 active:bg-green-400 h-16 rounded-xl flex items-center justify-center text-white transition-all active:scale-95 shadow-lg shadow-green-900/50"
+                    onclick="confirmBatch()">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                    </svg>
+                </button>
+            </div>
+            <button
+                class="w-full py-3 text-slate-400 hover:text-white transition-colors text-sm uppercase tracking-wider font-bold"
+                onclick="closeBatchModal()">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Add Modal -->
+    <div id="add-modal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex flex-col justify-center items-center p-4">
+        <div class="bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-600">
+            <h2 class="text-xl font-bold text-center mb-4 text-white">Nuevo Producto</h2>
+            <input type="text" id="new-product-name"
+                class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg p-3 mb-6 focus:outline-none focus:border-amber-500 placeholder-slate-600"
+                placeholder="Nombre...">
+            <div class="flex gap-3">
+                <button
+                    class="flex-1 py-3 bg-green-600 hover:bg-green-500 rounded-lg font-bold text-white shadow-lg active:scale-95 transition-all"
+                    onclick="confirmAddProduct()">Crear</button>
+                <button
+                    class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors active:scale-95"
+                    onclick="closeAddModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal"
+        class="fixed inset-0 bg-black/90 z-[100] hidden flex flex-col justify-center items-center p-4 backdrop-blur-sm">
+        <div
+            class="bg-slate-800 rounded-2xl w-full max-w-md shadow-2xl border border-slate-600 h-[80vh] flex flex-col relative overflow-hidden">
+            <div
+                class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/95 sticky top-0 z-10">
+                <h2 class="text-xl font-bold text-white">Historial</h2>
+                <button onclick="closeHistoryModal()"
+                    class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors">✕</button>
+            </div>
+
+            <div id="history-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <!-- Items -->
+            </div>
+
+            <div class="p-4 border-t border-slate-700 bg-slate-800">
+                <button
+                    class="w-full py-3 bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/50 rounded-xl text-sm font-bold transition-all active:scale-95"
+                    onclick="clearHistory()">BORRAR TODO</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+        const SUPABASE_URL = "https://ftzatcexxzyvevpysdps.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0emF0Y2V4eHp5dmV2cHlzZHBzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NDE1NDksImV4cCI6MjA4NDUxNzU0OX0.ptIqy3GDqhF8BpV1BM4kHxG8qtbHA0ckGmnCS2K53BM";
+
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // State
+        let inventoryData = [];
+        let currentHoldId = null;
+        let currentHoldChange = 0;
+        let holdTimer = null;
+        let repeatTimer = null;
+        let currentBatchId = null;
+        let batchValue = "0";
+
+        // --- CORE DATA FUNCTIONS ---
+
+        async function fetchInventory() {
+            const { data, error } = await supabase
+                .from('inventario_productos')
+                .select('*')
+                .order('id', { ascending: true });
+
+            if (error) {
+                console.error("Error fetching inventory:", error);
+                return [];
+            }
+            return data;
+        }
+
+        async function updateQuantity(id, change, specificValue = null) {
+            // Optimistic update logic is separate in UI handler
+
+            // Get current value first to calculate new value if relative change
+            // OR use DB level logic if possible, but JS logic is easier for specificValue
+
+            // 1. Get current item locally (fastest) or fetch (safest)
+            // We use local inventoryData for calculation to be snappy
+            const item = inventoryData.find(i => i.id === id);
+            if (!item) return;
+
+            let newQty = specificValue !== null
+                ? specificValue
+                : Math.max(0, item.cantidad + change);
+
+            const { error } = await supabase
+                .from('inventario_productos')
+                .update({ cantidad: newQty })
+                .eq('id', id);
+
+            if (error) console.error("Error updating quantity:", error);
+
+            return newQty;
+        }
+
+        async function logMovement(productName, change, isSet = false) {
+            // Insert into logs
+            const tipo = isSet ? 'set' : (change > 0 ? 'add' : 'remove');
+            const { error } = await supabase
+                .from('inventario_movimientos')
+                .insert([{
+                    producto_nombre: productName,
+                    cantidad_cambio: change,
+                    tipo_movimiento: tipo
+                }]);
+
+            if (error) console.error("Error logging movement:", error);
+        }
+
+        async function getLogs() {
+            const { data, error } = await supabase
+                .from('inventario_movimientos')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(100);
+
+            if (error) {
+                console.error("Error fetching logs:", error);
+                return [];
+            }
+            return data.map(log => ({
+                id: log.id,
+                name: log.producto_nombre,
+                time: new Date(log.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+                action: log.tipo_movimiento === 'set'
+                    ? `Set: ${log.cantidad_cambio}`
+                    : (log.cantidad_cambio > 0 ? `+${log.cantidad_cambio}` : `${log.cantidad_cambio}`),
+                type: log.tipo_movimiento
+            }));
+        }
+
+        async function clearLogs() {
+            // Functionality to clear logs implies potentially deleting rows or just hiding locally?
+            // Usually clearing history in a DB is dangerous. Let's just "deleteAll" if user really wants.
+            // But maybe we just want to clear the VIEW.
+            // For now, I'll implement a DELETE for all logs.
+            const { error } = await supabase
+                .from('inventario_movimientos')
+                .delete()
+                .neq('id', 0); // Delete all rows
+            if (error) console.error("Error clearing logs:", error);
+            renderHistory();
+        }
+
+        async function addProduct(name) {
+            const { data, error } = await supabase
+                .from('inventario_productos')
+                .insert([{ nombre: name, cantidad: 0 }])
+                .select();
+
+            if (error) {
+                console.error("Error adding product:", error);
+                showToast("Error al crear producto", "error");
+            } else {
+                return data[0];
+            }
+        }
+
+        function subscribeToInventory(onUpdate) {
+            supabase
+                .channel('inventario-changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_productos' }, (payload) => {
+                    const { eventType, new: newItem, old: oldItem } = payload;
+                    onUpdate({ eventType, new: newItem, old: oldItem });
+                })
+                .subscribe();
+        }
+
+        // --- RENDER ---
+        function renderGrid(products) {
+            const grid = document.getElementById('product-grid');
+            if (products.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center text-slate-500 py-10">Conectando a Supabase... o BD vacía.</div>';
+                return;
+            }
+
+            grid.innerHTML = products.map(p => `
+                <div class="group relative bg-slate-800 rounded-3xl overflow-hidden shadow-lg border border-slate-700/50 h-56 select-none touch-manipulation transform transition-transform active:scale-[0.98] cursor-pointer"
+                     id="card-${p.id}"
+                     data-id="${p.id}"
+                     data-name="${p.nombre}"
+                     onclick="if(!event.target.closest('button')) window.openBatchModal(${p.id})">
+
+                    <!-- Title Area -->
+                    <div class="absolute top-0 inset-x-0 h-14 bg-slate-800/90 flex items-center justify-center z-20 border-b border-slate-700/50 px-4">
+                        <h3 class="text-white font-bold text-center truncate w-full text-lg drop-shadow-md">${p.nombre}</h3>
+                    </div>
+
+                    <div class="hidden" id="qty-${p.id}">${p.cantidad}</div>
+
+                    <!-- Interactive Zones -->
+                    <div class="flex h-full pt-14">
+                        <!-- REMOVE ZONE (Red) -->
+                        <div class="flex-1 flex flex-col border-r border-slate-700/30">
+                            <!-- Minus 1 (Main) -->
+                            <button class="h-2/3 bg-slate-800 hover:bg-red-900/20 active:bg-red-600/30 flex items-center justify-center transition-colors relative group-active:border-red-500/20"
+                                    onpointerdown="window.startHold(event, ${p.id}, -1)"
+                                    onpointerup="window.endHold()"
+                                    onpointerleave="window.endHold()">
+                                <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M20 12H4"></path></svg>
+                            </button>
+                            <!-- Minus 10 (Secondary) -->
+                            <button class="h-1/3 bg-slate-800/50 hover:bg-red-900/30 active:bg-red-700/40 border-t border-slate-700/30 flex items-center justify-center"
+                                    onclick="window.handleAction(event, ${p.id}, -10)">
+                                <span class="text-red-400 font-bold text-sm">-10</span>
+                            </button>
+                        </div>
+
+                        <!-- ADD ZONE (Green) -->
+                        <div class="flex-1 flex flex-col">
+                            <!-- Plus 1 (Main) -->
+                            <button class="h-2/3 bg-slate-800 hover:bg-green-900/20 active:bg-green-600/30 flex items-center justify-center transition-colors relative"
+                                    onpointerdown="window.startHold(event, ${p.id}, 1)"
+                                    onpointerup="window.endHold()"
+                                    onpointerleave="window.endHold()">
+                                <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg>
+                            </button>
+                            <!-- Plus 10 (Secondary) -->
+                            <button class="h-1/3 bg-slate-800/50 hover:bg-green-900/30 active:bg-green-700/40 border-t border-slate-700/30 flex items-center justify-center"
+                                    onclick="window.handleAction(event, ${p.id}, 10)">
+                                <span class="text-green-400 font-bold text-sm">+10</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- INTERACTION LOGIC ---
+        // Attaching to window because module scope is isolated
+        window.startHold = (e, id, change) => {
+            e.preventDefault();
+            window.handleAction(e, id, change);
+            currentHoldId = id;
+            currentHoldChange = change;
+            holdTimer = setTimeout(() => {
+                repeatTimer = setInterval(() => {
+                    window.handleAction(null, currentHoldId, currentHoldChange, true);
+                }, 150);
+            }, 400);
+        };
+
+        window.endHold = () => {
+            clearTimeout(holdTimer);
+            clearInterval(repeatTimer);
+            holdTimer = null;
+            repeatTimer = null;
+            currentHoldId = null;
+        };
+
+        window.handleAction = async (e, id, change, isRapid = false) => {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            // Visual Logic
+            const card = document.getElementById(`card-${id}`);
+            const qtyEl = document.getElementById(`qty-${id}`);
+
+            // Effect: Particle
+            if (card) {
+                let x, y;
+                if (e && e.clientX) {
+                    const rect = card.getBoundingClientRect();
+                    x = e.clientX - rect.left;
+                    y = e.clientY - rect.top;
+                } else {
+                    x = card.offsetWidth / (change > 0 ? 1.5 : 4);
+                    y = card.offsetHeight / 2;
+                }
+                createParticle(card, x, y, change);
+                if (navigator.vibrate) navigator.vibrate(10);
+            }
+
+            // Optimistic update
+            if (qtyEl) {
+                let current = parseInt(qtyEl.innerText);
+                let next = Math.max(0, current + change);
+                qtyEl.innerText = next;
+
+                // Update local state immediately for responsiveness
+                const item = inventoryData.find(i => i.id === id);
+                if (item) item.cantidad = next;
+            }
+
+            // Actual Update 
+            await updateQuantity(id, change);
+
+            if (!isRapid) {
+                const product = inventoryData.find(p => p.id === id);
+                if (product) {
+                    if (Math.abs(change) >= 10) {
+                        const sign = change > 0 ? '+' : '';
+                        showToast(`${sign}${change} ${product.nombre}`, change > 0 ? 'success' : 'error');
+                        logMovement(product.nombre, change);
+                    } else {
+                        logMovement(product.nombre, change);
+                    }
+                }
+            }
+        };
+
+        function createParticle(parent, x, y, val) {
+            const el = document.createElement('div');
+            el.classList.add('particle', val > 0 ? 'particle-green' : 'particle-red');
+            el.innerText = val > 0 ? `+${val}` : val;
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+            parent.appendChild(el);
+            setTimeout(() => el.remove(), 600);
+        }
+
+        // --- BATCH & HISTORY ---
+
+        window.openBatchModal = (id) => {
+            currentBatchId = id;
+            updateBatchDisplay();
+            const p = inventoryData.find(x => x.id === id);
+            document.getElementById('batch-product-name').innerText = p ? p.nombre : '...';
+            batchValue = "0";
+            document.getElementById('batch-input-display').innerText = batchValue;
+            document.getElementById('batch-modal').classList.remove('hidden');
+            document.getElementById('batch-modal').classList.add('flex');
+        };
+
+        window.closeBatchModal = () => {
+            document.getElementById('batch-modal').classList.add('hidden');
+            document.getElementById('batch-modal').classList.remove('flex');
+            currentBatchId = null;
+        };
+
+        function updateBatchDisplay() {
+            document.getElementById('batch-input-display').innerText = batchValue;
+        }
+
+        document.querySelectorAll('.batch-key').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const num = e.target.innerText;
+                if (batchValue === "0") batchValue = num;
+                else batchValue += num;
+                updateBatchDisplay();
+            });
+        });
+
+        window.clearBatch = () => {
+            batchValue = "0";
+            document.getElementById('batch-input-display').innerText = "0";
+        };
+
+        window.confirmBatch = async () => {
+            if (currentBatchId) {
+                const qty = parseInt(batchValue);
+                const p = inventoryData.find(x => x.id === currentBatchId);
+
+                // Actual Update
+                await updateQuantity(currentBatchId, null, qty);
+
+                // Local Optimistic Update
+                if (p) p.cantidad = qty;
+                const qtyEl = document.getElementById(`qty-${currentBatchId}`);
+                if (qtyEl) qtyEl.innerText = qty;
+
+                closeBatchModal();
+                if (p) {
+                    showToast(`Stock: ${p.nombre} = ${qty}`, 'info');
+                    logMovement(p.nombre, qty, true);
+                }
+            }
+        };
+
+        // --- HISTORY ---
+        window.openHistoryModal = async () => {
+            const logs = await getLogs();
+            const list = document.getElementById('history-list');
+
+            if (logs.length === 0) {
+                list.innerHTML = '<div class="text-center text-slate-500 py-10">Vacío (Supabase)</div>';
+            } else {
+                list.innerHTML = logs.map(l => `
+                    <div class="flex justify-between items-center bg-slate-700/30 p-3 rounded-xl border-l-4 ${l.type === 'add' ? 'border-green-500' : (l.type === 'set' ? 'border-blue-500' : 'border-red-500')}">
+                        <div>
+                            <div class="font-bold text-slate-200">${l.name}</div>
+                            <div class="text-xs text-slate-500">${l.time}</div>
+                        </div>
+                        <div class="font-mono font-bold text-lg ${l.type === 'add' ? 'text-green-400' : (l.type === 'set' ? 'text-blue-400' : 'text-red-400')}">
+                            ${l.action}
+                        </div>
+                    </div>
+                `).join('');
+            }
+            document.getElementById('history-modal').classList.remove('hidden');
+            document.getElementById('history-modal').classList.add('flex');
+        };
+
+        window.closeHistoryModal = () => {
+            document.getElementById('history-modal').classList.add('hidden');
+            document.getElementById('history-modal').classList.remove('flex');
+        };
+
+        window.clearHistory = async () => {
+            if (confirm('¿Borrar TODO el historial en la nube?')) {
+                await clearLogs();
+                window.openHistoryModal();
+            }
+        };
+
+        // --- TOAST ---
+        function showToast(msg, type) {
+            const c = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            const color = type === 'success' ? 'bg-green-600' : (type === 'error' ? 'bg-red-600' : 'bg-blue-600');
+            el.className = `${color} text-white px-6 py-3 rounded-2xl shadow-xl font-bold text-center animate-bounce-in flex items-center justify-center gap-2`;
+            el.innerHTML = `<span>${msg}</span>`;
+            c.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(10px)';
+                setTimeout(() => el.remove(), 300);
+            }, 1500);
+        }
+
+        // --- INIT ---
+        window.openAddModal = () => {
+            document.getElementById('add-modal').classList.remove('hidden');
+            document.getElementById('add-modal').classList.add('flex');
+            document.getElementById('new-product-name').focus();
+        };
+        window.closeAddModal = () => {
+            document.getElementById('add-modal').classList.add('hidden');
+            document.getElementById('add-modal').classList.remove('flex');
+        };
+        window.confirmAddProduct = async () => {
+            const n = document.getElementById('new-product-name').value;
+            if (n) {
+                await addProduct(n);
+                closeAddModal();
+                showToast(`Producto ${n} creado`, 'success');
+                // Refresh will happen via subscription or we can force it
+                // Subscription will handle it
+            }
+        };
+
+        // Start
+        (async function init() {
+            inventoryData = await fetchInventory();
+            renderGrid(inventoryData);
+            document.getElementById('connection-status').classList.remove('bg-green-500', 'bg-red-500');
+            document.getElementById('connection-status').classList.add('bg-blue-500'); // Blue = Cloud
+
+            subscribeToInventory((payload) => {
+                if (payload.eventType === 'UPDATE') {
+                    // Update local state
+                    const idx = inventoryData.findIndex(i => i.id === payload.new.id);
+                    if (idx !== -1) {
+                        inventoryData[idx] = payload.new;
+                        // Update UI if needed (but optimistic update might have handled it)
+                        // If it came from another client, we MUST update UI
+                        const qtyEl = document.getElementById(`qty-${payload.new.id}`);
+                        if (qtyEl) qtyEl.innerText = payload.new.cantidad;
+                    }
+                } else if (payload.eventType === 'INSERT') {
+                    // Refetch all to be safe or append
+                    fetchInventory().then(data => {
+                        inventoryData = data;
+                        renderGrid(data);
+                    });
+                }
+            });
+        })();
+
+        // Add bounce anim
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @keyframes bounce-in {
+                0% { transform: translateY(20px); opacity: 0; }
+                50% { transform: translateY(-5px); }
+                100% { transform: translateY(0); opacity: 1; }
+            }
+            .animate-bounce-in { animation: bounce-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        `;
+        document.head.appendChild(style);
+
+    </script>
+</body>
+
+</html>

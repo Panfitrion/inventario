@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Producción - Cocina</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-900 text-white min-h-screen">
+
+    <!-- Header -->
+    <header class="fixed top-0 w-full bg-slate-800 p-4 shadow-lg z-50 flex justify-between items-center">
+        <h1 class="text-3xl font-bold tracking-wider text-amber-500 uppercase">Monitor de Stock</h1>
+        <div class="flex items-center gap-4">
+            <div id="connection-status" class="w-3 h-3 rounded-full bg-slate-500 animate-pulse" title="Conectando...">
+            </div>
+            <div class="text-2xl font-mono text-slate-300" id="clock">00:00</div>
+        </div>
+    </header>
+
+    <!-- Grid de Stock -->
+    <main id="product-grid" class="pt-24 p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+        <!-- Rendered by JS -->
+        <div class="col-span-full text-center text-slate-500 text-2xl py-20">Cargando monitor...</div>
+    </main>
+
+    <script type="module">
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+        const SUPABASE_URL = "https://ftzatcexxzyvevpysdps.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0emF0Y2V4eHp5dmV2cHlzZHBzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NDE1NDksImV4cCI6MjA4NDUxNzU0OX0.ptIqy3GDqhF8BpV1BM4kHxG8qtbHA0ckGmnCS2K53BM";
+
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // State
+        let inventoryData = [];
+
+        // --- CORE DATA ---
+
+        async function fetchInventory() {
+            const { data, error } = await supabase
+                .from('inventario_productos')
+                .select('*')
+                .order('id', { ascending: true });
+
+            if (error) {
+                console.error("Error fetching inventory:", error);
+                document.getElementById('connection-status').classList.remove('bg-green-500', 'bg-blue-500');
+                document.getElementById('connection-status').classList.add('bg-red-500');
+                return [];
+            }
+            document.getElementById('connection-status').classList.remove('bg-red-500', 'bg-slate-500');
+            document.getElementById('connection-status').classList.add('bg-green-500'); // Green = Connected
+            return data;
+        }
+
+        function subscribeToInventory(onUpdate) {
+            const channel = supabase
+                .channel('monitor-changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_productos' }, (payload) => {
+                    const { eventType, new: newItem, old: oldItem } = payload;
+                    onUpdate({ eventType, new: newItem, old: oldItem });
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('Monitor subscribed to realtime updates');
+                    }
+                });
+        }
+
+        // --- UI RENDER ---
+
+        async function init() {
+            // First load
+            inventoryData = await fetchInventory();
+            renderGrid(inventoryData);
+
+            // Clock
+            setInterval(() => {
+                document.getElementById('clock').innerText = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+            }, 1000);
+
+            // Realtime Updates
+            subscribeToInventory((payload) => {
+                if (payload.eventType === 'UPDATE') {
+                    updateCard(payload.new);
+                } else if (payload.eventType === 'INSERT') {
+                    // Full reload usually safer for sorting
+                    fetchInventory().then(data => {
+                        inventoryData = data;
+                        renderGrid(data);
+                    });
+                }
+            });
+
+            // Keep connections alive / refresh periodically just in case (every 2 mins)
+            setInterval(async () => {
+                const checked = await fetchInventory();
+                // Simple sync check? Or just trust realtime. 
+                // Let's trust realtime but log connection status.
+            }, 120000);
+        }
+
+        function renderGrid(products) {
+            const grid = document.getElementById('product-grid');
+            if (products.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center text-slate-500 text-xl">Sin datos o error de conexión.</div>';
+                return;
+            }
+
+            grid.innerHTML = products.map(p => `
+                <div class="bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-between shadow-xl border border-slate-700 relative overflow-hidden" id="card-${p.id}">
+                    <h2 class="text-2xl font-medium text-slate-400 text-center mb-4 truncate w-full">${p.nombre}</h2>
+                    <div class="text-8xl font-black text-white tracking-tighter transition-all duration-300 scale-100" id="qty-${p.id}">${p.cantidad}</div>
+                    
+                    <!-- Decoración visual -->
+                    <div class="absolute bottom-0 w-full h-2 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-50"></div>
+                </div>
+            `).join('');
+        }
+
+        function updateCard(item) {
+            const qtyEl = document.getElementById(`qty-${item.id}`);
+            const cardEl = document.getElementById(`card-${item.id}`);
+
+            if (qtyEl) {
+                const oldQty = parseInt(qtyEl.innerText);
+                qtyEl.innerText = item.cantidad;
+
+                // Animación visual solo si cambia
+                if (item.cantidad !== oldQty) {
+                    const color = item.cantidad > oldQty ? 'text-green-400' : 'text-red-400';
+                    qtyEl.classList.add(color, 'scale-125');
+                    cardEl.classList.add('ring-2', item.cantidad > oldQty ? 'ring-green-500' : 'ring-red-500');
+
+                    setTimeout(() => {
+                        qtyEl.classList.remove(color, 'scale-125');
+                        cardEl.classList.remove('ring-2', 'ring-green-500', 'ring-red-500');
+                    }, 500);
+                }
+            } else {
+                // Si el item no existe (raro en UPDATE), recargar todo
+                fetchInventory().then(renderGrid);
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
