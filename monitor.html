@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,9 +12,7 @@
         }
     </style>
 </head>
-
 <body class="bg-slate-900 text-white min-h-screen">
-
     <!-- Header -->
     <header class="fixed top-0 w-full bg-slate-800 p-4 shadow-lg z-50 flex justify-between items-center">
         <h1 class="text-3xl font-bold tracking-wider text-amber-500 uppercase">Monitor de Stock</h1>
@@ -25,32 +22,25 @@
             <div class="text-2xl font-mono text-slate-300" id="clock">00:00</div>
         </div>
     </header>
-
     <!-- Grid de Stock -->
-    <main id="product-grid" class="pt-24 p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+    <main id="product-grid" class="fixed inset-0 pt-20 pb-4 px-4 grid gap-4 overflow-hidden box-border">
         <!-- Rendered by JS -->
-        <div class="col-span-full text-center text-slate-500 text-2xl py-20">Cargando monitor...</div>
+        <div class="col-span-full flex items-center justify-center text-slate-500 text-2xl h-full">Cargando monitor...
+        </div>
     </main>
-
     <script type="module">
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-
         const SUPABASE_URL = "https://rxzpaflpmekhyeegxbvc.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4enBhZmxwbWVraHllZWd4YnZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3Njk5NzcsImV4cCI6MjA4NjM0NTk3N30.aIPraY-MB-28quUEYO2Nh1W1881USLbBNB1k_6H8FP8";
-
         const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
         // State
         let inventoryData = [];
-
         // --- CORE DATA ---
-
         async function fetchInventory() {
             const { data, error } = await supabase
                 .from('inventario_productos')
                 .select('*')
                 .order('id', { ascending: true });
-
             if (error) {
                 console.error("Error fetching inventory:", error);
                 document.getElementById('connection-status').classList.remove('bg-green-500', 'bg-blue-500');
@@ -61,7 +51,6 @@
             document.getElementById('connection-status').classList.add('bg-green-500'); // Green = Connected
             return data;
         }
-
         function subscribeToInventory(onUpdate) {
             const channel = supabase
                 .channel('monitor-changes')
@@ -75,72 +64,74 @@
                     }
                 });
         }
-
         // --- UI RENDER ---
-
         async function init() {
             // First load
             inventoryData = await fetchInventory();
             renderGrid(inventoryData);
-
             // Clock
             setInterval(() => {
                 document.getElementById('clock').innerText = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
             }, 1000);
-
+            // Re-render on resize to adjust layout if needed (optional, grid handles most)
+            window.addEventListener('resize', () => renderGrid(inventoryData));
             // Realtime Updates
             subscribeToInventory((payload) => {
                 if (payload.eventType === 'UPDATE') {
                     updateCard(payload.new);
                 } else if (payload.eventType === 'INSERT') {
-                    // Full reload usually safer for sorting
                     fetchInventory().then(data => {
                         inventoryData = data;
                         renderGrid(data);
                     });
                 }
             });
-
             // Keep connections alive / refresh periodically just in case (every 2 mins)
             setInterval(async () => {
-                const checked = await fetchInventory();
-                // Simple sync check? Or just trust realtime. 
-                // Let's trust realtime but log connection status.
+                await fetchInventory();
             }, 120000);
         }
-
         function renderGrid(products) {
             const grid = document.getElementById('product-grid');
-            if (products.length === 0) {
-                grid.innerHTML = '<div class="col-span-full text-center text-slate-500 text-xl">Sin datos o error de conexión.</div>';
+            const count = products.length;
+            if (count === 0) {
+                grid.innerHTML = '<div class="col-span-full flex items-center justify-center text-slate-500 text-xl h-full">Sin datos o error de conexión.</div>';
                 return;
             }
-
+            // Calculate Optimal Rows/Cols to fit screen
+            // Goal: Square-ish cells, but prioritize fitting everything
+            // Aspect ratio of screen
+            const screenRatio = grid.clientWidth / grid.clientHeight;
+            // Heuristic: sqrt(count * screenRatio) gives approx columns
+            let cols = Math.ceil(Math.sqrt(count * screenRatio));
+            let rows = Math.ceil(count / cols);
+            // Adjust styles
+            grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+            grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+            // Dynamic Font Sizing based on cell height
+            // We can set a CSS variable or just rely on vh/vw units in CSS?
+            // Let's use simple tailwind classes but maybe scale check
             grid.innerHTML = products.map(p => `
-                <div class="bg-slate-800 rounded-3xl p-8 flex flex-col items-center justify-between shadow-xl border border-slate-700 relative overflow-hidden" id="card-${p.id}">
-                    <h2 class="text-2xl font-medium text-slate-400 text-center mb-4 truncate w-full">${p.nombre}</h2>
-                    <div class="text-8xl font-black text-white tracking-tighter transition-all duration-300 scale-100" id="qty-${p.id}">${p.cantidad}</div>
+                <div class="bg-slate-800 rounded-2xl p-2 flex flex-col items-center justify-center shadow-lg border border-slate-700 relative overflow-hidden h-full w-full" id="card-${p.id}">
+                    <h2 class="text-sm md:text-base lg:text-lg font-medium text-slate-400 text-center truncate w-full px-2">${p.nombre}</h2>
+                    <div class="text-4xl md:text-5xl lg:text-7xl font-black text-white tracking-tighter" id="qty-${p.id}">${p.cantidad}</div>
                     
                     <!-- Decoración visual -->
-                    <div class="absolute bottom-0 w-full h-2 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-50"></div>
+                    <div class="absolute bottom-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-30"></div>
                 </div>
             `).join('');
         }
-
         function updateCard(item) {
             const qtyEl = document.getElementById(`qty-${item.id}`);
             const cardEl = document.getElementById(`card-${item.id}`);
-
             if (qtyEl) {
                 const oldQty = parseInt(qtyEl.innerText);
                 qtyEl.innerText = item.cantidad;
-
                 // Animación visual solo si cambia
                 if (item.cantidad !== oldQty) {
                     const color = item.cantidad > oldQty ? 'text-green-400' : 'text-red-400';
                     qtyEl.classList.add(color, 'scale-125');
                     cardEl.classList.add('ring-2', item.cantidad > oldQty ? 'ring-green-500' : 'ring-red-500');
-
                     setTimeout(() => {
                         qtyEl.classList.remove(color, 'scale-125');
                         cardEl.classList.remove('ring-2', 'ring-green-500', 'ring-red-500');
@@ -151,9 +142,7 @@
                 fetchInventory().then(renderGrid);
             }
         }
-
         init();
     </script>
 </body>
-
 </html>
