@@ -1,3 +1,9 @@
+
+monitor.html
+Inventario
+
+
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -99,25 +105,26 @@
                 return;
             }
             // Calculate Optimal Rows/Cols to fit screen
-            // Goal: Square-ish cells, but prioritize fitting everything
-            // Aspect ratio of screen
+            // Goal: Wide Rectangular Cards (e.g. 3:1 ratio) to show full names
             const screenRatio = grid.clientWidth / grid.clientHeight;
-            // Heuristic: sqrt(count * screenRatio) gives approx columns
-            let cols = Math.ceil(Math.sqrt(count * screenRatio));
+            const targetCardRatio = 3.0; // Wide rectangle preference
+            // Formula: cols = sqrt(count * screenRatio / targetCardRatio)
+            let cols = Math.round(Math.sqrt(count * screenRatio / targetCardRatio));
+            cols = Math.max(1, cols); // At least 1 col
             let rows = Math.ceil(count / cols);
             // Adjust styles
             grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
             grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
-            // Dynamic Font Sizing based on cell height
-            // We can set a CSS variable or just rely on vh/vw units in CSS?
-            // Let's use simple tailwind classes but maybe scale check
             grid.innerHTML = products.map(p => `
-                <div class="bg-slate-800 rounded-2xl p-2 flex flex-col items-center justify-center shadow-lg border border-slate-700 relative overflow-hidden h-full w-full" id="card-${p.id}">
-                    <h2 class="text-sm md:text-base lg:text-lg font-medium text-slate-400 text-center truncate w-full px-2">${p.nombre}</h2>
-                    <div class="text-4xl md:text-5xl lg:text-7xl font-black text-white tracking-tighter" id="qty-${p.id}">${p.cantidad}</div>
+                <div class="bg-slate-800 rounded-xl p-4 flex flex-row items-center justify-between shadow-lg border border-slate-700 relative overflow-hidden h-full w-full gap-4 group" id="card-${p.id}">
+                    <!-- Name Area -->
+                    <h2 class="text-lg md:text-xl lg:text-2xl font-bold text-slate-300 text-left leading-tight line-clamp-2 flex-1">${p.nombre}</h2>
+                    
+                    <!-- Qty Area -->
+                    <div class="text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter tabular-nums z-10" id="qty-${p.id}">${p.cantidad}</div>
                     
                     <!-- Decoración visual -->
-                    <div class="absolute bottom-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-30"></div>
+                    <div class="absolute bottom-0 left-0 w-1 h-full bg-gradient-to-t from-amber-600 to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
                 </div>
             `).join('');
         }
