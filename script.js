@@ -8,17 +8,17 @@ window.onerror = function(msg, source, lineno, colno, error) {
 
 // --- DATA & STATE ---
 const DEFAULT_CLIENTS = [
-    { id: 1, name: "Starbucks", branch: "Centro" },
-    { id: 2, name: "Starbucks", branch: "Norte" },
-    { id: 3, name: "Cielito Querido", branch: "Plaza" },
-    { id: 4, name: "Punta del Cielo", branch: "" },
-    { id: 5, name: "Italian Coffee", branch: "Sur" }
+    { id: 1, name: "Starbucks", branch: "Centro", productIds: [1, 2, 3] },
+    { id: 2, name: "Starbucks", branch: "Norte", productIds: [1, 2, 3] },
+    { id: 3, name: "Cielito Querido", branch: "Plaza", productIds: [1, 3] },
+    { id: 4, name: "Punta del Cielo", branch: "", productIds: [2, 3] },
+    { id: 5, name: "Italian Coffee", branch: "Sur", productIds: [1, 2] }
 ];
 
 const DEFAULT_PRODUCTS = [
-    { id: 1, name: "Croissants", emoji: "🥐" },
-    { id: 2, name: "Chocolatines", emoji: "🍫" },
-    { id: 3, name: "Muffins", emoji: "🧁" }
+    { id: 1, code: "CR001", name: "Croissants", emoji: "🥐" },
+    { id: 2, code: "CH001", name: "Chocolatines", emoji: "🍫" },
+    { id: 3, code: "MF001", name: "Muffins", emoji: "🧁" }
 ];
 
 let state = {
@@ -34,6 +34,7 @@ let state = {
 const app = {
     init: () => {
         try {
+            app.normalizeCatalogData();
             app.renderDashboardClients();
             app.updateStats();
             
@@ -59,6 +60,40 @@ const app = {
         localStorage.setItem('activeRoute', JSON.stringify(state.activeRoute));
         localStorage.setItem('history', JSON.stringify(state.history));
         app.updateStats();
+    },
+
+    normalizeCatalogData: () => {
+        const productIds = state.products.map(p => p.id);
+        state.products = state.products.map((p, idx) => ({
+            ...p,
+            code: p.code || app.buildProductCode(p.name, idx + 1),
+            emoji: p.emoji || '📦'
+        }));
+
+        state.clients = state.clients.map(c => ({
+            ...c,
+            productIds: Array.isArray(c.productIds)
+                ? c.productIds.filter(id => productIds.includes(id))
+                : productIds
+        }));
+
+        app.save();
+    },
+
+    buildProductCode: (name, fallback) => {
+        const letters = (name || 'Producto')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z]/g, '')
+            .slice(0, 2)
+            .toUpperCase()
+            .padEnd(2, 'P');
+        return `${letters}${String(fallback).padStart(3, '0')}`;
+    },
+
+    getClientProducts: (client) => {
+        const ids = Array.isArray(client.productIds) ? client.productIds : state.products.map(p => p.id);
+        return state.products.filter(p => ids.includes(p.id));
     },
 
     updateStats: () => {
@@ -110,6 +145,7 @@ const app = {
                 <div class="ml-4 flex-1">
                     <p class="text-sm font-bold text-slate-800">${c.name}</p>
                     ${c.branch ? `<p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">${c.branch}</p>` : ''}
+                    <p class="text-[10px] text-blue-500 font-bold uppercase tracking-wider mt-0.5">${app.getClientProducts(c).length} productos</p>
                 </div>
             `;
             list.appendChild(div);
@@ -139,7 +175,13 @@ const app = {
                 status: 'pending',
                 completedAt: null,
                 notes: '',
-                data: state.products.map(p => ({ productId: p.id, productName: p.name, delivered: 0, returned: 0 }))
+                data: app.getClientProducts(c).map(p => ({
+                    productId: p.id,
+                    productCode: p.code,
+                    productName: p.name,
+                    delivered: 0,
+                    returned: 0
+                }))
             })),
             completed: false
         };
@@ -193,8 +235,11 @@ const app = {
                             ${stop.data.map((prod, pIdx) => `
                                 <div class="flex items-center justify-between gap-2">
                                     <div class="w-24 font-bold text-slate-700 text-xs flex items-center gap-1.5 leading-tight">
-                                        <span class="text-base">${app.getProductEmoji(prod.productName)}</span>
-                                        ${prod.productName}
+                                        <span class="text-base">${app.getProductEmoji(prod.productId, prod.productName)}</span>
+                                        <span>
+                                            <span class="block text-[9px] text-blue-500 uppercase">${prod.productCode || app.getProductCode(prod.productId, prod.productName)}</span>
+                                            ${prod.productName}
+                                        </span>
                                     </div>
                                     <div class="flex items-center gap-2 flex-1">
                                         <div class="flex-1 bg-slate-50 rounded-lg border border-slate-200 p-1 flex flex-col items-center cursor-pointer active:bg-blue-50 active:border-blue-300 transition-colors" onclick="app.openKeypad(${index}, ${pIdx}, 'delivered', this)">
@@ -368,9 +413,14 @@ const app = {
     },
 
     // --- HISTORY & HELPERS ---
-    getProductEmoji: (name) => {
-        const p = state.products.find(x => x.name === name);
+    getProductEmoji: (id, name) => {
+        const p = state.products.find(x => x.id === id) || state.products.find(x => x.name === name);
         return p ? p.emoji : '📦';
+    },
+
+    getProductCode: (id, name) => {
+        const p = state.products.find(x => x.id === id) || state.products.find(x => x.name === name);
+        return p ? p.code : '';
     },
 
     viewHistory: () => {
@@ -406,9 +456,10 @@ const app = {
             msg += `📅 *${new Date(r.startTime).toLocaleDateString('es-ES',{weekday:'long', day:'numeric'})}*\n`;
             let totals = {};
             r.stops.forEach(s => s.data.forEach(d => {
-                if(!totals[d.productName]) totals[d.productName] = {ent:0, dev:0};
-                totals[d.productName].ent += d.delivered;
-                totals[d.productName].dev += d.returned;
+                const key = `${d.productCode || app.getProductCode(d.productId, d.productName)} ${d.productName}`.trim();
+                if(!totals[key]) totals[key] = {ent:0, dev:0};
+                totals[key].ent += d.delivered;
+                totals[key].dev += d.returned;
             }));
             
             Object.keys(totals).forEach(k => {
@@ -441,33 +492,77 @@ const app = {
     renderConfigLists: () => {
         const cList = document.getElementById('config-client-list');
         cList.innerHTML = state.clients.map((c, i) => `
-            <li class="px-4 py-3 flex justify-between items-center bg-white">
-                <span class="text-sm font-bold text-slate-700">${c.name} <span class="font-normal text-slate-400 text-xs">${c.branch||''}</span></span>
-                <button onclick="app.delClient(${i})" class="text-red-400 font-bold px-2">✕</button>
+            <li class="px-4 py-3 bg-white">
+                <div class="flex justify-between items-start gap-3">
+                    <div>
+                        <span class="text-sm font-bold text-slate-700">${c.name} <span class="font-normal text-slate-400 text-xs">${c.branch||''}</span></span>
+                        <p class="text-[10px] text-blue-500 font-bold uppercase tracking-wider mt-1">${app.getClientProducts(c).length} productos asignados</p>
+                    </div>
+                    <button onclick="app.delClient(${i})" class="text-red-400 font-bold px-2">✕</button>
+                </div>
+                <div class="mt-3 grid grid-cols-1 gap-2">
+                    ${state.products.map(p => `
+                        <label class="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+                            <input type="checkbox" class="logistics-checkbox w-4 h-4 rounded border-slate-300 text-blue-600" ${app.clientHasProduct(c, p.id) ? 'checked' : ''} onchange="app.toggleClientProduct(${i}, ${p.id}, this.checked)">
+                            <span class="font-bold text-blue-600">${p.code}</span>
+                            <span>${p.emoji} ${p.name}</span>
+                        </label>
+                    `).join('')}
+                </div>
             </li>
         `).join('');
         
         const pList = document.getElementById('config-product-list');
         pList.innerHTML = state.products.map((p, i) => `
             <li class="px-4 py-3 flex justify-between items-center bg-white">
-                <span class="text-sm font-bold text-slate-700">${p.emoji} ${p.name}</span>
+                <span class="text-sm font-bold text-slate-700"><span class="text-blue-600 text-xs mr-2">${p.code}</span>${p.emoji} ${p.name}</span>
                 <button onclick="app.delProd(${i})" class="text-red-400 font-bold px-2">✕</button>
             </li>
         `).join('');
     },
 
+    clientHasProduct: (client, productId) => {
+        return Array.isArray(client.productIds) && client.productIds.includes(productId);
+    },
+
+    toggleClientProduct: (clientIdx, productId, checked) => {
+        const client = state.clients[clientIdx];
+        const ids = new Set(client.productIds || []);
+        if(checked) ids.add(productId);
+        else ids.delete(productId);
+        client.productIds = Array.from(ids);
+        app.save();
+        app.renderConfigLists();
+        app.renderDashboardClients();
+    },
+
     addClientPrompt: () => {
         const n = prompt("Nombre:"); if(!n) return;
-        state.clients.push({id: Date.now(), name: n, branch: prompt("Sucursal:")||""});
+        state.clients.push({id: Date.now(), name: n, branch: prompt("Sucursal:")||"", productIds: state.products.map(p => p.id)});
         app.save(); app.renderConfigLists(); app.renderDashboardClients();
     },
     delClient: (i) => { if(confirm("¿Borrar?")) { state.clients.splice(i,1); app.save(); app.renderConfigLists(); app.renderDashboardClients(); } },
     addProductPrompt: () => {
         const n = prompt("Producto:"); if(!n) return;
-        state.products.push({id: Date.now(), name: n, emoji: prompt("Emoji:")||"📦"});
+        const code = prompt("Código del producto:") || app.buildProductCode(n, state.products.length + 1);
+        const product = {id: Date.now(), code: code.trim().toUpperCase(), name: n, emoji: prompt("Emoji:")||"📦"};
+        state.products.push(product);
+        state.clients.forEach(c => {
+            c.productIds = Array.isArray(c.productIds) ? c.productIds : [];
+            c.productIds.push(product.id);
+        });
         app.save(); app.renderConfigLists();
     },
-    delProd: (i) => { if(confirm("¿Borrar?")) { state.products.splice(i,1); app.save(); app.renderConfigLists(); } },
+    delProd: (i) => {
+        if(confirm("¿Borrar?")) {
+            const productId = state.products[i].id;
+            state.products.splice(i,1);
+            state.clients.forEach(c => c.productIds = (c.productIds || []).filter(id => id !== productId));
+            app.save();
+            app.renderConfigLists();
+            app.renderDashboardClients();
+        }
+    },
     resetAllData: () => { if(confirm("¿BORRAR TODO?")) { localStorage.clear(); location.reload(); } }
 };
 
