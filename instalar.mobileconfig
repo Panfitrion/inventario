@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key>
+      <string>com.apple.webClip.managed</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>PayloadIdentifier</key>
+      <string>com.panfitrion.inventario.webclip</string>
+      <key>PayloadUUID</key>
+      <string>22222222-3333-4444-5555-666666666666</string>
+      <key>PayloadDisplayName</key>
+      <string>Inventario</string>
+      <key>Label</key>
+      <string>Inventario</string>
+      <key>URL</key>
+      <string>https://panfitrion.github.io/inventario/</string>
+      <key>FullScreen</key>
+      <true/>
+      <key>IsRemovable</key>
+      <true/>
+    </dict>
+  </array>
+
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+  <key>PayloadIdentifier</key>
+  <string>com.panfitrion.inventario.profile</string>
+  <key>PayloadUUID</key>
+  <string>bbbbbbbb-cccc-dddd-eeee-ffffffffffff</string>
+  <key>PayloadDisplayName</key>
+  <string>Instalar Inventario</string>
+  <key>PayloadOrganization</key>
+  <string>Panfitrion</string>
+</dict>
+</plist>
